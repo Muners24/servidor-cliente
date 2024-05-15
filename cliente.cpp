@@ -68,6 +68,13 @@ int main() {
         if(key)
         {
             send(clientSocket, message.c_str(), message.length(),0);
+
+            char buffer[512];
+            int bytesReceived = recv(clientSocket, buffer, 512, 0);
+            if (bytesReceived > 0)
+            {
+                std::cout << std::string(buffer, 0, bytesReceived) << std::endl;
+            }
         }
     }
 
