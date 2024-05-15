@@ -6,6 +6,7 @@
 #include <list>
 #include <thread>
 #include <mutex>
+#include <atomic>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -14,9 +15,11 @@ const int SERVER_PORT = 12345;
 using std::thread;
 using std::list;
 
+
 void HandleClient(SOCKET clientSocket,int numeroCliente)
 {
-    while (true)
+    bool isRunning = true;
+    while (isRunning)
     {
         char buffer[512];
         int bytesReceived = recv(clientSocket, buffer, 512, 0);
@@ -24,27 +27,26 @@ void HandleClient(SOCKET clientSocket,int numeroCliente)
         {
             std::cout << "Mensaje recibido" << numeroCliente <<":" << std::string(buffer, 0, bytesReceived) << std::endl;
 
-            // Aquí puedes procesar el mensaje recibido según tus necesidades
 
-            // Opcionalmente, enviar una respuesta al cliente
+
+            //respuesta al cliente
             const char *responseMessage = "Mensaje recibido correctamente.";
             send(clientSocket, responseMessage, strlen(responseMessage), 0);
         }
         else if (bytesReceived == 0)
         {
-            // El cliente cerró la conexión
-            std::cout << "Cliente desconectado." << std::endl;
-            break; // Salir del bucle
+            std::cout << "Cliente "<< numeroCliente <<" desconectado." << std::endl;
+            isRunning = false;
+            break;
         }
         else
         {
-            // Ocurrió un error al recibir el mensaje
             std::cerr << "Error al recibir el mensaje del cliente" << std::endl;
-            break; // Salir del bucle
+            isRunning = false;
+            break; 
         }
     }
 
-    // Cerrar la conexión
     closesocket(clientSocket);
 }
 
@@ -91,9 +93,6 @@ int main()
         return 1;
     }
 
-    list<SOCKET> clientSokets;
-    auto cliente = clientSokets.end();
-
     list<thread> clientThreads;
 
     int i = 0;
@@ -115,13 +114,6 @@ int main()
         clientThreads.emplace_back(HandleClient, clientSocket,++i);
     }
 
-    // Cerrar la conexión y limpiar
-    cliente = clientSokets.begin();
-    while (cliente != clientSokets.end())
-    {
-        closesocket((*cliente));
-        cliente++;
-    }
     closesocket(listeningSocket);
     WSACleanup();
     return 0;
