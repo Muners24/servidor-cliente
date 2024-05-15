@@ -3,9 +3,50 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <list>
+#include <thread>
+#include <mutex>
+
 #pragma comment(lib, "Ws2_32.lib")
 
 const int SERVER_PORT = 12345;
+
+using std::thread;
+using std::list;
+
+void HandleClient(SOCKET clientSocket,int numeroCliente)
+{
+    while (true)
+    {
+        char buffer[512];
+        int bytesReceived = recv(clientSocket, buffer, 512, 0);
+        if (bytesReceived > 0)
+        {
+            std::cout << "Mensaje recibido" << numeroCliente <<":" << std::string(buffer, 0, bytesReceived) << std::endl;
+
+            // Aquí puedes procesar el mensaje recibido según tus necesidades
+
+            // Opcionalmente, enviar una respuesta al cliente
+            const char *responseMessage = "Mensaje recibido correctamente.";
+            send(clientSocket, responseMessage, strlen(responseMessage), 0);
+        }
+        else if (bytesReceived == 0)
+        {
+            // El cliente cerró la conexión
+            std::cout << "Cliente desconectado." << std::endl;
+            break; // Salir del bucle
+        }
+        else
+        {
+            // Ocurrió un error al recibir el mensaje
+            std::cerr << "Error al recibir el mensaje del cliente" << std::endl;
+            break; // Salir del bucle
+        }
+    }
+
+    // Cerrar la conexión
+    closesocket(clientSocket);
+}
 
 int main()
 {
@@ -50,50 +91,37 @@ int main()
         return 1;
     }
 
-    SOCKET clientSocket;
-    // Aceptar una conexión entrante
-    sockaddr_in clientAddr;
-    int clientAddrSize = sizeof(clientAddr);
-    clientSocket = accept(listeningSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrSize);
-    if (clientSocket == INVALID_SOCKET)
+    list<SOCKET> clientSokets;
+    auto cliente = clientSokets.end();
+
+    list<thread> clientThreads;
+
+    int i = 0;
+    while (true)
     {
-        std::cerr << "Error al aceptar la conexión" << std::endl;
-        closesocket(listeningSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    while (1)
-    {
-        // Recibir el mensaje del cliente
-        char buffer[512];
-        int bytesReceived = recv(clientSocket, buffer, 512, 0);
-        if (bytesReceived > 0)
+        // Aceptar una conexión entrante
+        sockaddr_in clientAddr;
+        int clientAddrSize = sizeof(clientAddr);
+        SOCKET clientSocket = accept(listeningSocket, reinterpret_cast<sockaddr *>(&clientAddr), &clientAddrSize);
+        if (clientSocket == INVALID_SOCKET)
         {
-            std::cout << "Mensaje recibido: " << std::string(buffer, 0, bytesReceived) << std::endl;
+            std::cerr << "Error al aceptar la conexión" << std::endl;
+            closesocket(listeningSocket);
+            WSACleanup();
+            return 1;
+        }
 
-            // Aquí puedes procesar el mensaje recibido según tus necesidades
-
-            // Opcionalmente, enviar una respuesta al cliente
-            const char *responseMessage = "Mensaje recibido correctamente.";
-            send(clientSocket, responseMessage, strlen(responseMessage), 0);
-        }
-        else if (bytesReceived == 0)
-        {
-            // El cliente cerró la conexión
-            std::cout << "Cliente desconectado." << std::endl;
-            break; // Salir del bucle
-        }
-        else
-        {
-            // Ocurrió un error al recibir el mensaje
-            std::cerr << "Error al recibir el mensaje del cliente" << std::endl;
-            break; // Salir del bucle
-        }
+        // Crear un hilo para manejar al cliente
+        clientThreads.emplace_back(HandleClient, clientSocket,++i);
     }
 
     // Cerrar la conexión y limpiar
-    closesocket(clientSocket);
+    cliente = clientSokets.begin();
+    while (cliente != clientSokets.end())
+    {
+        closesocket((*cliente));
+        cliente++;
+    }
     closesocket(listeningSocket);
     WSACleanup();
     return 0;
